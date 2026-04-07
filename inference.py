@@ -8,7 +8,7 @@ API_BASE_URL = os.getenv("API_BASE_URL", "dummy")
 MODEL_NAME = os.getenv("MODEL_NAME", "dummy")
 HF_TOKEN = os.getenv("HF_TOKEN", "dummy")
 
-#  CONFIG 
+# CONFIG 
 SPACE_URL = "https://arrowman123-customer-supp-env.hf.space"
 
 TASK_NAME = "customer-support"
@@ -19,7 +19,7 @@ MAX_TOTAL_REWARD = 20
 SUCCESS_SCORE_THRESHOLD = 0.6
 
 
-#  DUMMY AGENT 
+# DUMMY AGENT
 def get_model_message(state):
     state = state.lower()
 
@@ -44,7 +44,7 @@ def safe_post(url, json=None, retries=3):
     raise Exception("Failed after retries")
 
 
-#  LOGGING 
+# LOGGING 
 def log_start(**kwargs):
     print("[START]", kwargs, flush=True)
 
@@ -116,5 +116,6 @@ async def main():
         )
 
 
+#  ENTRY 
 if __name__ == "__main__":
     asyncio.run(main())
