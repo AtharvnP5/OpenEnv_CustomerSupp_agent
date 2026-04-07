@@ -1,0 +1,16 @@
+name: customer-support-env
+description: Simulated e-commerce customer support environment for evaluating AI agents on handling refund, replacement, and fraud detection scenarios.
+
+version: 1.0
+
+entrypoint:
+  type: http
+  url: http://localhost:7860
+
+tasks:
+  - name: easy
+    description: Handle straightforward genuine customer requests
+  - name: medium
+    description: Handle policy-based decisions and edge cases
+  - name: hard
+    description: Handle suspicious or ambiguous requests requiring clarification
