@@ -1,5 +1,3 @@
-import random
-
 class SupportEnv:
     def __init__(self, cases):
         self.cases = cases
