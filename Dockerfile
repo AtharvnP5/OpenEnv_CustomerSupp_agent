@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY . .
 
-RUN pip install fastapi uvicorn pydantic
+RUN pip install .
 
 EXPOSE 7860
 
