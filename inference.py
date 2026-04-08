@@ -2,13 +2,13 @@ import asyncio
 import os
 import requests
 import time
+from openai import OpenAI   
 
-#  REQUIRED VARIABLES 
-API_BASE_URL = os.getenv("API_BASE_URL", "dummy")
-MODEL_NAME = os.getenv("MODEL_NAME", "dummy")
-HF_TOKEN = os.getenv("HF_TOKEN")
+# REQUIRED VARIABLES
+API_BASE_URL = os.environ["API_BASE_URL"]   
+API_KEY = os.environ["API_KEY"]             
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
 
-# CONFIG 
 SPACE_URL = "https://arrowman123-customer-supp-env.hf.space"
 
 TASK_NAME = "customer-support"
@@ -19,21 +19,30 @@ MAX_TOTAL_REWARD = 20
 SUCCESS_SCORE_THRESHOLD = 0.6
 
 
-# DUMMY AGENT
-def get_model_message(state):
-    state = state.lower()
+# LLM AGENT 
+def get_model_message(client, state):
+    prompt = f"""
+You are a customer support agent.
 
-    if "damaged" in state or "broken" in state:
-        return "refund"
-    elif "wrong item" in state:
-        return "replace"
-    elif "not sure" in state or "seems" in state:
-        return "ask_proof"
-    else:
-        return "reject"
+State:
+{state}
+
+Choose ONLY ONE word:
+refund / replace / reject / ask_proof
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.choices[0].message.content.strip().lower()
+    except Exception as e:
+        print(f"[ERROR] LLM call failed: {e}")
+        return "reject"   # fallback
 
 
-#  SAFE REQUEST 
+# SAFE REQUEST
 def safe_post(url, json=None, retries=3):
     for i in range(retries):
         try:
@@ -44,29 +53,32 @@ def safe_post(url, json=None, retries=3):
     raise Exception("Failed after retries")
 
 
-# LOGGING 
+# LOGGING
 def log_start(**kwargs):
     print("[START]", kwargs, flush=True)
 
-
 def log_step(**kwargs):
     print("[STEP]", kwargs, flush=True)
-
 
 def log_end(**kwargs):
     print("[END]", kwargs, flush=True)
 
 
-#  MAIN 
+# MAIN
 async def main():
     rewards = []
     steps_taken = 0
     success = False
 
+    # Initialize client using THEIR proxy
+    client = OpenAI(
+        base_url=API_BASE_URL,
+        api_key=API_KEY
+    )
+
     log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
 
     try:
-        # RESET
         res = safe_post(f"{SPACE_URL}/reset")
         result = res.json()
 
@@ -77,7 +89,8 @@ async def main():
             if done:
                 break
 
-            message = get_model_message(state)
+            #  USE LLM
+            message = get_model_message(client, state)
 
             res = safe_post(
                 f"{SPACE_URL}/step",
@@ -116,6 +129,5 @@ async def main():
         )
 
 
-#  ENTRY 
 if __name__ == "__main__":
     asyncio.run(main())
