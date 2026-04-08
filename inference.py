@@ -62,27 +62,31 @@ def log_end(**kwargs):
     print("[END]", kwargs, flush=True)
 
 
-#  MAIN 
 async def main():
     client = OpenAI(
         base_url=API_BASE_URL,
         api_key=API_KEY
     )
 
-    log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
-
     task_scores = []
 
     try:
         # run 3 tasks
-        for _ in range(3):
+        for task_idx in range(3):
+            # 1. Log the START of each individual task with a unique ID
+            current_task_name = f"{TASK_NAME}-{task_idx}"
+            log_start(task=current_task_name, env=BENCHMARK, model=MODEL_NAME)
+
             res = safe_post(f"{SPACE_URL}/reset")
             result = res.json()
 
             state = result["observation"]["echoed_message"]
             done = result["done"]
+            
+            steps_taken = 0
 
             for step in range(1, MAX_STEPS + 1):
+                steps_taken = step
                 if done:
                     break
 
@@ -107,23 +111,24 @@ async def main():
 
             #  GET SCORE FROM ENV
             score = result.get("score", 0.5)
-            score = max(0.01, min(0.99, score))
-
+            
+            # This clamp is correct and fixes your second error!
+            score = max(0.01, min(0.99, score)) 
             task_scores.append(score)
 
+            # 2. Log the END of each individual task
+            log_end(
+                success=True,
+                steps=steps_taken, # Log steps per task, not total tasks
+                score=score
+            )
+
+        # Optional: Print final average for your own debugging
         final_score = sum(task_scores) / len(task_scores)
+        print(f"[DEBUG] All tasks completed. Final Average Score: {final_score}")
 
     except Exception as e:
         print(f"[ERROR] {e}")
-
-    finally:
-        log_end(
-            success=True,
-            steps=len(task_scores),
-            score=final_score if 'final_score' in locals() else 0.0,
-            rewards=task_scores
-        )
-
 
 if __name__ == "__main__":
     asyncio.run(main())
