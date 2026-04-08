@@ -2,11 +2,11 @@ import asyncio
 import os
 import requests
 import time
-from openai import OpenAI   
+from openai import OpenAI
 
 # REQUIRED VARIABLES
-API_BASE_URL = os.environ["API_BASE_URL"]   
-API_KEY = os.environ["API_KEY"]             
+API_BASE_URL = os.environ["API_BASE_URL"]
+API_KEY = os.environ["API_KEY"]
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
 
 SPACE_URL = "https://arrowman123-customer-supp-env.hf.space"
@@ -19,7 +19,7 @@ MAX_TOTAL_REWARD = 20
 SUCCESS_SCORE_THRESHOLD = 0.6
 
 
-# LLM AGENT 
+#  LLM AGENT 
 def get_model_message(client, state):
     prompt = f"""
 You are a customer support agent.
@@ -39,10 +39,10 @@ refund / replace / reject / ask_proof
         return response.choices[0].message.content.strip().lower()
     except Exception as e:
         print(f"[ERROR] LLM call failed: {e}")
-        return "reject"   # fallback
+        return "reject"
 
 
-# SAFE REQUEST
+#  SAFE REQUEST 
 def safe_post(url, json=None, retries=3):
     for i in range(retries):
         try:
@@ -53,7 +53,7 @@ def safe_post(url, json=None, retries=3):
     raise Exception("Failed after retries")
 
 
-# LOGGING
+#  LOGGING 
 def log_start(**kwargs):
     print("[START]", kwargs, flush=True)
 
@@ -64,13 +64,12 @@ def log_end(**kwargs):
     print("[END]", kwargs, flush=True)
 
 
-# MAIN
+#  MAIN 
 async def main():
     rewards = []
     steps_taken = 0
     success = False
 
-    # Initialize client using THEIR proxy
     client = OpenAI(
         base_url=API_BASE_URL,
         api_key=API_KEY
@@ -89,7 +88,6 @@ async def main():
             if done:
                 break
 
-            #  USE LLM
             message = get_model_message(client, state)
 
             res = safe_post(
@@ -114,7 +112,10 @@ async def main():
             )
 
         score = sum(rewards) / MAX_TOTAL_REWARD if MAX_TOTAL_REWARD > 0 else 0.0
-        score = max(0.0, min(1.0, score))
+
+        # ensure score strictly between 0 and 1
+        score = max(0.01, min(0.99, score))
+
         success = score >= SUCCESS_SCORE_THRESHOLD
 
     except Exception as e:
@@ -129,5 +130,6 @@ async def main():
         )
 
 
+#  ENTRY 
 if __name__ == "__main__":
     asyncio.run(main())
