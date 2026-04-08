@@ -2,13 +2,15 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from environment import SupportEnv
 from dataset import easy_cases, medium_cases, hard_cases
-import random
 
 app = FastAPI()
 
-#  Models 
+#Models 
 class Action(BaseModel):
     message: str
+
+class ResetRequest(BaseModel):
+    task: str = "easy"
 
 #  Parser 
 def parse_action(message):
@@ -25,30 +27,33 @@ def parse_action(message):
     else:
         return "reject"
 
-#  Environment (ALL TASKS COMBINED) 
-def create_env():
-    selected_cases = easy_cases + medium_cases + hard_cases
-    random.shuffle(selected_cases)
-    return SupportEnv(selected_cases)
+#  TASKS 
+TASKS = {
+    "easy": easy_cases,
+    "medium": medium_cases,
+    "hard": hard_cases
+}
 
-env = create_env()
+env = None
 
-#  Routes 
+# RESET 
 @app.post("/reset")
-def reset():
+def reset(req: ResetRequest):
     global env
-    env = create_env()
 
+    task = req.task
+    cases = TASKS.get(task, easy_cases)
+
+    env = SupportEnv(cases)
     obs = env.reset()
 
     return {
-        "observation": {
-            "echoed_message": obs
-        },
+        "observation": {"echoed_message": obs},
         "reward": 0.0,
         "done": False
     }
 
+# STEP 
 @app.post("/step")
 def step(action: Action):
     parsed_action = parse_action(action.message)
@@ -56,9 +61,7 @@ def step(action: Action):
     obs, reward, done = env.step(parsed_action)
 
     return {
-        "observation": {
-            "echoed_message": obs
-        },
+        "observation": {"echoed_message": obs},
         "reward": reward,
         "done": done
     }
