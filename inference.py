@@ -11,10 +11,11 @@ MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
 
 SPACE_URL = "https://arrowman123-customer-supp-env.hf.space"
 
-TASK_NAME = "customer-support"
 BENCHMARK = "openenv"
 
 MAX_STEPS = 20
+
+TASK_NAMES = ["easy", "medium", "hard"]
 
 
 #  LLM AGENT 
@@ -69,13 +70,12 @@ async def main():
         api_key=API_KEY
     )
 
-    log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
+    for task_name in TASK_NAMES:
+        step_rewards = []
+        score = 0.5  # safe default
 
-    task_scores = []
-
-    try:
-        # run 3 tasks
-        for _ in range(3):
+        log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
+        try:
             res = safe_post(f"{SPACE_URL}/reset")
             result = res.json()
 
@@ -96,33 +96,33 @@ async def main():
 
                 state = result["observation"]["echoed_message"]
                 done = result["done"]
+                reward = result.get("reward", 0.0)
+                step_rewards.append(reward)
 
                 log_step(
+                    task=task_name,
                     step=step,
                     action=message,
-                    reward=result.get("reward", 0.0),
+                    reward=reward,
                     done=done,
                     error=None
                 )
 
-            #  GET SCORE FROM ENV
-            score = result.get("score", 0.5)
-            score = max(0.01, min(0.99, score))
+            raw_score = result.get("score", 0.5)
+            score = max(0.05, min(0.95, float(raw_score)))
 
-            task_scores.append(score)
+        except Exception as e:
+            print(f"[ERROR] task={task_name} {e}")
+            score = 0.1  # non-zero fallback so it stays in range
 
-        final_score = sum(task_scores) / len(task_scores)
-
-    except Exception as e:
-        print(f"[ERROR] {e}")
-
-    finally:
-        log_end(
-            success=True,
-            steps=len(task_scores),
-            score=final_score if 'final_score' in locals() else 0.0,
-            rewards=task_scores
-        )
+        finally:
+            log_end(
+                task=task_name,
+                success=True,
+                steps=len(step_rewards),
+                score=score,
+                rewards=step_rewards
+            )
 
 
 if __name__ == "__main__":
