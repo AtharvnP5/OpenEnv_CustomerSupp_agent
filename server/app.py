@@ -6,11 +6,11 @@ import random
 
 app = FastAPI()
 
-# Models 
+#  Models 
 class Action(BaseModel):
     message: str
 
-# Parser
+#  Parser 
 def parse_action(message):
     message = message.lower()
 
@@ -25,22 +25,19 @@ def parse_action(message):
     else:
         return "reject"
 
-# Environment (dynamic tasks) 
+#  Environment (ALL TASKS COMBINED) 
 def create_env():
-    selected_cases = random.choice([
-        easy_cases,
-        medium_cases,
-        hard_cases
-    ])
+    selected_cases = easy_cases + medium_cases + hard_cases
+    random.shuffle(selected_cases)
     return SupportEnv(selected_cases)
 
 env = create_env()
 
-# Routes 
+#  Routes 
 @app.post("/reset")
 def reset():
     global env
-    env = create_env()   # NEW TASK EACH TIME
+    env = create_env()
 
     obs = env.reset()
 
