@@ -4,20 +4,25 @@ import requests
 import time
 from openai import OpenAI
 
-# REQUIRED VARIABLES
-API_BASE_URL = os.environ["API_BASE_URL"]
-API_KEY = os.environ["API_KEY"]
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
+# REQUIRED ENV VARIABLES
+API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
+MODEL_NAME   = os.getenv("MODEL_NAME", "gpt-4o-mini")
+HF_TOKEN     = os.getenv("HF_TOKEN")
 
-SPACE_URL = "https://arrowman123-customer-supp-env.hf.space"
+if HF_TOKEN is None:
+    raise ValueError("HF_TOKEN environment variable is required")
 
-TASK_NAME = "customer-support"
-BENCHMARK = "openenv"
+API_KEY = os.getenv("API_KEY", HF_TOKEN)
 
-MAX_STEPS = 20
+SPACE_URL  = "https://arrowman123-customer-supp-env.hf.space"
+BENCHMARK  = "openenv"
+MAX_STEPS  = 20
+
+# Task names must match openenv.yaml and cycle easy → medium → hard
+TASK_NAMES = ["easy", "medium", "hard"]
 
 
-#  LLM AGENT 
+# LLM AGENT
 def get_model_message(client, state):
     prompt = f"""
 You are a customer support agent.
@@ -28,7 +33,6 @@ State:
 Choose ONLY ONE word:
 refund / replace / reject / ask_proof
 """
-
     try:
         response = client.chat.completions.create(
             model=MODEL_NAME,
@@ -36,7 +40,7 @@ refund / replace / reject / ask_proof
         )
         return response.choices[0].message.content.strip().lower()
     except Exception as e:
-        print(f"[ERROR] LLM failed: {e}")
+        print(f"[ERROR] LLM failed: {e}", flush=True)
         return "reject"
 
 
@@ -46,83 +50,70 @@ def safe_post(url, json=None, retries=3):
         try:
             return requests.post(url, json=json, timeout=10)
         except Exception as e:
-            print(f"[DEBUG] retry {i+1} due to {e}")
+            print(f"[DEBUG] retry {i+1} due to {e}", flush=True)
             time.sleep(2)
     raise Exception("Failed after retries")
 
+def log_start(task, env, model):
+    print(f"[START] task={task} env={env} model={model}", flush=True)
 
-# LOGGING 
-def log_start(**kwargs):
-    print("[START]", kwargs, flush=True)
-
-def log_step(**kwargs):
-    print("[STEP]", kwargs, flush=True)
-
-def log_end(**kwargs):
-    print("[END]", kwargs, flush=True)
-
-
-#  MAIN 
-async def main():
-    client = OpenAI(
-        base_url=API_BASE_URL,
-        api_key=API_KEY
+def log_step(step, action, reward, done, error=None):
+    error_str = "null" if error is None else str(error)
+    done_str  = "true" if done else "false"
+    print(
+        f"[STEP] step={step} action={action} reward={reward:.2f} "
+        f"done={done_str} error={error_str}",
+        flush=True
     )
 
-    log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
+def log_end(success, steps, rewards):
+    success_str = "true" if success else "false"
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    print(f"[END] success={success_str} steps={steps} rewards={rewards_str}", flush=True)
 
-    task_scores = []
 
-    try:
-        # run 3 tasks
-        for _ in range(3):
-            res = safe_post(f"{SPACE_URL}/reset")
+# MAIN
+async def main():
+    # HF_TOKEN is used as the API key per guidelines
+    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+
+    for task_name in TASK_NAMES:
+        step_rewards = []
+        success      = False
+
+        log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
+
+        try:
+            res    = safe_post(f"{SPACE_URL}/reset")
             result = res.json()
 
             state = result["observation"]["echoed_message"]
-            done = result["done"]
+            done  = result["done"]
 
             for step in range(1, MAX_STEPS + 1):
                 if done:
                     break
 
-                message = get_model_message(client, state)
+                action = get_model_message(client, state)
 
-                res = safe_post(
-                    f"{SPACE_URL}/step",
-                    json={"message": message}
-                )
+                res    = safe_post(f"{SPACE_URL}/step", json={"message": action})
                 result = res.json()
 
-                state = result["observation"]["echoed_message"]
-                done = result["done"]
+                state  = result["observation"]["echoed_message"]
+                done   = result["done"]
+                reward = float(result.get("reward", 0.0))
 
-                log_step(
-                    step=step,
-                    action=message,
-                    reward=result.get("reward", 0.0),
-                    done=done,
-                    error=None
-                )
+                step_rewards.append(reward)
 
-            #  GET SCORE FROM ENV
-            score = result.get("score", 0.5)
-            score = max(0.01, min(0.99, score))
+                log_step(step=step, action=action, reward=reward, done=done, error=None)
 
-            task_scores.append(score)
+            success = True
 
-        final_score = sum(task_scores) / len(task_scores)
+        except Exception as e:
+            print(f"[ERROR] task={task_name} {e}", flush=True)
 
-    except Exception as e:
-        print(f"[ERROR] {e}")
-
-    finally:
-        log_end(
-            success=True,
-            steps=len(task_scores),
-            score=final_score if 'final_score' in locals() else 0.0,
-            rewards=task_scores
-        )
+        finally:
+            log_end(success=success, steps=len(step_rewards), rewards=step_rewards)
 
 
 if __name__ == "__main__":
