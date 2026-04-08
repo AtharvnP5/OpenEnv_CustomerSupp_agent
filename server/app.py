@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from environment import SupportEnv
 from dataset import easy_cases, medium_cases, hard_cases
+from typing import Optional
 
 app = FastAPI()
 
@@ -36,12 +37,17 @@ TASKS = {
 
 env = None
 
-# RESET 
+# RESET
 @app.post("/reset")
-def reset(req: ResetRequest):
+def reset(req: Optional[ResetRequest] = None):
     global env
 
-    cases = TASKS.get(req.task, easy_cases)
+    # HANDLE MISSING BODY
+    task = "easy"
+    if req is not None and req.task:
+        task = req.task
+
+    cases = TASKS.get(task, easy_cases)
     env = SupportEnv(cases)
 
     obs = env.reset()
