@@ -18,7 +18,6 @@ SPACE_URL  = "https://arrowman123-customer-supp-env.hf.space"
 BENCHMARK  = "openenv"
 MAX_STEPS  = 20
 
-# Task names must match openenv.yaml and cycle easy → medium → hard
 TASK_NAMES = ["easy", "medium", "hard"]
 
 
@@ -66,25 +65,25 @@ def log_step(step, action, reward, done, error=None):
         flush=True
     )
 
-def log_end(success, steps, rewards):
+def log_end(success, steps, score, rewards):
     success_str = "true" if success else "false"
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
-    print(f"[END] success={success_str} steps={steps} rewards={rewards_str}", flush=True)
+    print(f"[END] success={success_str} steps={steps} score={score:.4f} rewards={rewards_str}", flush=True)
 
 
 # MAIN
 async def main():
-    # HF_TOKEN is used as the API key per guidelines
     client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
 
     for task_name in TASK_NAMES:
         step_rewards = []
+        score        = 0.5
         success      = False
 
         log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
 
         try:
-            res    = safe_post(f"{SPACE_URL}/reset")
+            res    = safe_post(f"{SPACE_URL}/reset", json={"task": task_name})
             result = res.json()
 
             state = result["observation"]["echoed_message"]
@@ -107,13 +106,16 @@ async def main():
 
                 log_step(step=step, action=action, reward=reward, done=done, error=None)
 
-            success = True
+            raw_score = float(result.get("info", {}).get("score", 0.5))
+            score     = max(0.05, min(0.95, raw_score))
+            success   = True
 
         except Exception as e:
             print(f"[ERROR] task={task_name} {e}", flush=True)
+            score = 0.1
 
         finally:
-            log_end(success=success, steps=len(step_rewards), rewards=step_rewards)
+            log_end(success=success, steps=len(step_rewards), score=score, rewards=step_rewards)
 
 
 if __name__ == "__main__":
