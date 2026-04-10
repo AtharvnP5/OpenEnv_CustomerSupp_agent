@@ -14,7 +14,7 @@ if HF_TOKEN is None:
 
 API_KEY = os.getenv("API_KEY", HF_TOKEN)
 
-SPACE_URL  = "https://arrowman123-customer-supp-env.hf.space"
+SPACE_URL  = "https://meta-hackathon1-customer-support-env.hf.space"
 BENCHMARK  = "openenv"
 MAX_STEPS  = 20
 
